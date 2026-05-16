@@ -16,8 +16,8 @@
     font-family: 'Courier New', monospace;
     overflow: hidden;
     touch-action: none;
-     -webkit-user-select: none;
-     user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   #hud {
     color: #FFD700;
@@ -59,9 +59,37 @@
     touch-action: manipulation;
   }
   #restartBtn:active { background: #ffa500; }
+  #splash {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+  }
+  #splash canvas {
+    border: none;
+  }
+  #splashText {
+    color: #FFD700;
+    font-family: 'Courier New', monospace;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    margin-top: 30px;
+    animation: blink 1s step-start infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
 <body>
+<div id="splash" ontouchstart="startGame()" onclick="startGame()">
+  <canvas id="splashCanvas" width="160" height="160"></canvas>
+  <div id="splashText">TOCA PARA JUGAR</div>
+</div>
 <div id="hud">NIVEL: 1 &nbsp; VIDAS: 5</div>
 <canvas id="gameCanvas"></canvas>
 <div id="message">¡Llega a la puerta!</div>
@@ -530,8 +558,68 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-initLevel();
-loop();
+let loopRunning = false;
+
+function startGame() {
+  const splash = document.getElementById('splash');
+  if (splash) splash.style.display = 'none';
+  resize();
+  initLevel();
+  if (!loopRunning) {
+    loopRunning = true;
+    loop();
+  }
+}
+
+// Draw big pacman on splash canvas
+(function drawSplashPacman() {
+  const sc = document.getElementById('splashCanvas');
+  const sx = sc.getContext('2d');
+  const cx = 80, cy = 85, r = 60;
+  sx.fillStyle = '#000';
+  sx.fillRect(0, 0, 160, 160);
+  sx.fillStyle = '#FFD700';
+  sx.beginPath();
+  sx.moveTo(cx, cy);
+  sx.arc(cx, cy, r, 0.25*Math.PI, 1.75*Math.PI);
+  sx.closePath();
+  sx.fill();
+  // Eye
+  sx.fillStyle = '#000';
+  sx.beginPath();
+  sx.arc(cx + r*0.35, cy - r*0.45, r*0.1, 0, Math.PI*2);
+  sx.fill();
+  // Animate mouth
+  let m = 0.25, opening = false;
+  setInterval(() => {
+    m += opening ? 0.04 : -0.04;
+    if (m >= 0.13) opening = false;
+    if (m <= 0.04) opening = true;
+    sx.fillStyle = '#000';
+    sx.fillRect(0, 0, 160, 160);
+    sx.fillStyle = '#FFD700';
+    sx.beginPath();
+    sx.moveTo(cx, cy);
+    sx.arc(cx, cy, r, m*Math.PI, (2-m)*Math.PI);
+    sx.closePath();
+    sx.fill();
+    sx.fillStyle = '#000';
+    sx.beginPath();
+    sx.arc(cx + r*0.35, cy - r*0.45, r*0.1, 0, Math.PI*2);
+    sx.fill();
+  }, 40);
+})();
+
+// Fix Safari tab reactivation
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    resize();
+    if (!loopRunning) {
+      loopRunning = true;
+      loop();
+    }
+  }
+});
 </script>
 </body>
 </html>
