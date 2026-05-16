@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>html,body{background:#000!important}</style>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Comecocos Laberinto</title>
@@ -619,14 +622,26 @@ function startGame() {
   }, 40);
 })();
 
-// Fix Safari tab reactivation
+// Fix Safari tab reactivation / cache restore
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
+  if (document.visibilityState === 'visible' && gameStarted) {
     resize();
+    initLevel();
     if (!loopRunning) {
       loopRunning = true;
       loop();
     }
+  }
+});
+
+// pageshow fires when Safari restores a frozen page from cache
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && gameStarted) {
+    resize();
+    initLevel();
+    loopRunning = false;
+    loopRunning = true;
+    loop();
   }
 });
 </script>
