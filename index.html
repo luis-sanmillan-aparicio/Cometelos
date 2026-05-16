@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<style>html,body{background:#000!important}</style>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Comecocos Laberinto</title>
 <style>
@@ -85,7 +86,7 @@
   @keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
-<body>
+<body style="background:#000">
 <div id="splash" ontouchstart="startGame()" onclick="startGame()">
   <canvas id="splashCanvas" width="160" height="160"></canvas>
   <div id="splashText">TOCA PARA JUGAR</div>
@@ -560,9 +561,12 @@ function loop() {
 
 let loopRunning = false;
 
+let gameStarted = false;
 function startGame() {
+  if (gameStarted) return;
+  gameStarted = true;
   const splash = document.getElementById('splash');
-  if (splash) splash.style.display = 'none';
+  if (splash) splash.remove();
   resize();
   initLevel();
   if (!loopRunning) {
