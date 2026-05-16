@@ -60,7 +60,7 @@
 </style>
 </head>
 <body>
-<div id="hud">NIVEL: 1 &nbsp; VIDAS: 3</div>
+<div id="hud">NIVEL: 1 &nbsp; VIDAS: 5</div>
 <canvas id="gameCanvas"></canvas>
 <div id="message">¡Llega a la puerta!</div>
 <button id="restartBtn" ontouchstart="restartGame()" onclick="restartGame()">▶ REINICIAR</button>
@@ -86,7 +86,7 @@ function resize() {
 resize();
 
 // Game state
-let level = 1, lives = 3;
+let level = 1, lives = 5;
 let maze = [], dots = [];
 let pacman = {}, ghosts = [];
 let exitCell = {};
@@ -98,14 +98,12 @@ let mouthAngle = 0, mouthOpen = true;
 // Swipe
 let touchStartX = 0, touchStartY = 0;
 
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
+document.addEventListener('touchstart', e => {
   touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
-}, {passive: false});
+}, {passive: true});
 
-canvas.addEventListener('touchend', e => {
-  e.preventDefault();
+document.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = e.changedTouches[0].clientY - touchStartY;
   if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
@@ -114,7 +112,7 @@ canvas.addEventListener('touchend', e => {
   } else {
     nextDir = dy > 0 ? {x:0,y:1} : {x:0,y:-1};
   }
-}, {passive: false});
+}, {passive: true});
 
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') nextDir = {x:1,y:0};
@@ -223,8 +221,8 @@ function initLevel() {
   // Remove dot at exit
   dots = dots.filter(d => !(d.r===exitCell.r && d.c===exitCell.c));
 
-  // Ghosts: nivel 1 → 1 fantasma, nivel 2 → 2, etc. (máx 5)
-  const ghostCount = Math.min(level, 5);
+  // Ghosts: 1 fantasma nivel 1-2, 2 en nivel 3-4, etc. (máx 5)
+  const ghostCount = Math.min(Math.ceil(level / 2), 5);
   ghosts = [];
   const ghostColors = ['#FF00FF','#00FF00','#FF6600','#00FFFF','#FF0055'];
   const ghostStarts = reachable.filter(c => !(c.r===1&&c.c===1) && !(c.r===exitCell.r&&c.c===exitCell.c));
@@ -397,7 +395,7 @@ function loseLife() {
 }
 
 function restartGame() {
-  level = 1; lives = 3;
+  level = 1; lives = 5;
   restartBtn.style.display = 'none';
   initLevel();
 }
