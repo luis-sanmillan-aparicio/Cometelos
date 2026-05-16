@@ -114,8 +114,6 @@ function resize() {
   canvas.width = COLS * CELL;
   canvas.height = ROWS * CELL;
 }
-resize();
-
 // Game state
 let level = 1, lives = 5;
 let maze = [], dots = [];
@@ -548,11 +546,11 @@ const PACMAN_SPEED = 5; // frames per move (slower = easier)
 const PACMAN_SPEED_MIN = 5;
 
 function loop() {
+  if (canvas.width === 0 || canvas.height === 0) resize();
   if (!gameOver && !gameWon) {
     frame++;
     if (frame % PACMAN_SPEED === 0) movePacman();
     if (!gameOver) moveGhosts();
-    // Check collision every frame (catches cross-over between moves)
     if (!gameOver) checkGhostCollision();
   }
   draw();
