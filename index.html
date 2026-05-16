@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Comecocos Laberinto</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #hud {
+    color: #FFD700;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    padding: 8px 0;
+    text-align: center;
+    width: 100%;
+  }
+  #gameCanvas {
+    display: block;
+    border: 3px solid #00f;
+    cursor: none;
+  }
+  #message {
+    color: #FFD700;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    padding: 6px 0;
+    text-align: center;
+    min-height: 28px;
+    font-family: 'Courier New', monospace;
+  }
+  #restartBtn {
+    display: none;
+    margin-top: 12px;
+    padding: 16px 40px;
+    background: #FFD700;
+    color: #000;
+    font-size: 22px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #restartBtn:active { background: #ffa500; }
+</style>
+</head>
+<body>
+<div id="hud">NIVEL: 1 &nbsp; VIDAS: 3</div>
+<canvas id="gameCanvas"></canvas>
+<div id="message">¡Llega a la puerta!</div>
+<button id="restartBtn" ontouchstart="restartGame()" onclick="restartGame()">▶ REINICIAR</button>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const hud = document.getElementById('hud');
+const msgEl = document.getElementById('message');
+const restartBtn = document.getElementById('restartBtn');
+
+// Responsive sizing
+const COLS = 21, ROWS = 21;
+let CELL;
+
+function resize() {
+  const maxW = Math.min(window.innerWidth - 6, 500);
+  const maxH = window.innerHeight - 120;
+  CELL = Math.floor(Math.min(maxW / COLS, maxH / ROWS));
+  canvas.width = COLS * CELL;
+  canvas.height = ROWS * CELL;
+}
+resize();
+
+// Game state
+let level = 1, lives = 3;
+let maze = [], dots = [];
+let pacman = {}, ghosts = [];
+let exitCell = {};
+let gameOver = false, gameWon = false;
+let frame = 0;
+let pacDir = {x:0,y:0}, nextDir = {x:0,y:0};
+let mouthAngle = 0, mouthOpen = true;
+
+// Swipe
+let touchStartX = 0, touchStartY = 0;
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, {passive: false});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    nextDir = dx > 0 ? {x:1,y:0} : {x:-1,y:0};
+  } else {
+    nextDir = dy > 0 ? {x:0,y:1} : {x:0,y:-1};
+  }
+}, {passive: false});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') nextDir = {x:1,y:0};
+  if (e.key === 'ArrowLeft')  nextDir = {x:-1,y:0};
+  if (e.key === 'ArrowDown')  nextDir = {x:0,y:1};
+  if (e.key === 'ArrowUp')    nextDir = {x:0,y:-1};
+  if (e.key === 'r' || e.key === 'R') restartGame();
+});
+
+// ---- Maze generation ----
+// Backtracker clásico + 28 cruces extra para bifurcaciones. Paredes sólidas.
+function generateMaze() {
+  const grid = Array.from({length: ROWS}, () => Array(COLS).fill(1));
+
+  function carve(r, c) {
+    const dirs = [{r:-2,c:0},{r:2,c:0},{r:0,c:-2},{r:0,c:2}];
+    shuffle(dirs);
+    for (const d of dirs) {
+      const nr = r + d.r, nc = c + d.c;
+      if (nr>0 && nr<ROWS-1 && nc>0 && nc<COLS-1 && grid[nr][nc]===1) {
+        grid[r+d.r/2][c+d.c/2] = 0;
+        grid[nr][nc] = 0;
+        carve(nr, nc);
+      }
+    }
+  }
+  grid[1][1] = 0;
+  carve(1, 1);
+
+  // Abrir ~28 paredes internas entre pasillos ya existentes para añadir cruces
+  const candidates = [];
+  for (let r = 1; r < ROWS-1; r++) {
+    for (let c = 1; c < COLS-1; c++) {
+      if (grid[r][c] !== 1) continue;
+      if (r % 2 === 1 && c % 2 === 0 && grid[r][c-1]===0 && grid[r][c+1]===0)
+        candidates.push({r,c});
+      if (r % 2 === 0 && c % 2 === 1 && grid[r-1][c]===0 && grid[r+1][c]===0)
+        candidates.push({r,c});
+    }
+  }
+  shuffle(candidates);
+  const toOpen = Math.min(28, Math.floor(candidates.length * 0.45));
+  for (let i = 0; i < toOpen; i++) grid[candidates[i].r][candidates[i].c] = 0;
+
+  return grid;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+}
+
+function getPassageCells() {
+  const cells = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (maze[r][c] === 0) cells.push({r,c});
+  return cells;
+}
+
+function bfsReachable(sr, sc) {
+  const visited = Array.from({length:ROWS}, () => Array(COLS).fill(false));
+  const queue = [{r:sr,c:sc}];
+  visited[sr][sc] = true;
+  const reachable = [];
+  while (queue.length) {
+    const {r,c} = queue.shift();
+    reachable.push({r,c});
+    for (const d of [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}]) {
+      const nr=r+d.r, nc=c+d.c;
+      if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visited[nr][nc]&&maze[nr][nc]===0) {
+        visited[nr][nc]=true;
+        queue.push({r:nr,c:nc});
+      }
+    }
+  }
+  return reachable;
+}
+
+function initLevel() {
+  maze = generateMaze();
+  dots = [];
+
+  // Place dots in all passage cells
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (maze[r][c] === 0) dots.push({r,c,eaten:false});
+
+  // Pacman starts at (1,1)
+  pacman = {r:1, c:1, x:1, y:1};
+  pacDir = {x:0, y:0};
+  nextDir = {x:0, y:0};
+  mouthAngle = 0.25;
+  mouthOpen = true;
+
+  // Find exit: reachable cell far from start
+  const reachable = bfsReachable(1, 1);
+  // pick a cell far from (1,1)
+  reachable.sort((a,b) => (Math.abs(b.r-1)+Math.abs(b.c-1)) - (Math.abs(a.r-1)+Math.abs(a.c-1)));
+  // avoid placing exit at pacman start
+  const exitCandidates = reachable.filter(c => !(c.r===1&&c.c===1));
+  exitCell = exitCandidates[0] || reachable[1];
+
+  // Remove dot at exit
+  dots = dots.filter(d => !(d.r===exitCell.r && d.c===exitCell.c));
+
+  // Ghosts: nivel 1 → 1 fantasma, nivel 2 → 2, etc. (máx 5)
+  const ghostCount = Math.min(level, 5);
+  ghosts = [];
+  const ghostColors = ['#FF00FF','#00FF00','#FF6600','#00FFFF','#FF0055'];
+  const ghostStarts = reachable.filter(c => !(c.r===1&&c.c===1) && !(c.r===exitCell.r&&c.c===exitCell.c));
+  shuffle(ghostStarts);
+  for (let i = 0; i < Math.min(ghostCount, 6); i++) {
+    const pos = ghostStarts[i % ghostStarts.length];
+    ghosts.push({
+      r: pos.r, c: pos.c,
+      x: pos.c, y: pos.r,
+      color: ghostColors[i % ghostColors.length],
+      chasing: i % 3 === 0, // every 3rd ghost chases
+      moveTimer: 0,
+      moveInterval: Math.max(10, 22 - (level-1)*2)
+    });
+  }
+
+  gameOver = false;
+  gameWon = false;
+  frame = 0;
+  restartBtn.style.display = 'none';
+  msgEl.style.color = '#FFD700';
+  msgEl.textContent = '¡Llega a la puerta!';
+  updateHUD();
+}
+
+function updateHUD() {
+  hud.textContent = `NIVEL: ${level}   VIDAS: ${lives}`;
+}
+
+function canMove(r, c) {
+  return r >= 0 && r < ROWS && c >= 0 && c < COLS && maze[r][c] === 0;
+}
+
+// BFS for ghost chasing
+function bfsNext(fromR, fromC, toR, toC) {
+  const visited = Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const queue = [{r:fromR,c:fromC,path:[]}];
+  visited[fromR][fromC]=true;
+  while(queue.length){
+    const {r,c,path}=queue.shift();
+    for(const d of [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}]){
+      const nr=r+d.r,nc=c+d.c;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visited[nr][nc]&&maze[nr][nc]===0){
+        visited[nr][nc]=true;
+        const newPath=[...path,{r:nr,c:nc}];
+        if(nr===toR&&nc===toC) return newPath[0]||{r:fromR,c:fromC};
+        queue.push({r:nr,c:nc,path:newPath});
+      }
+    }
+  }
+  return {r:fromR,c:fromC};
+}
+
+function checkGhostCollision() {
+  for (const g of ghosts) {
+    if (g.r === pacman.r && g.c === pacman.c) {
+      loseLife();
+      return true;
+    }
+  }
+  return false;
+}
+
+function movePacman() {
+  // Try to apply nextDir
+  const nr = pacman.r + nextDir.y;
+  const nc = pacman.c + nextDir.x;
+  if (canMove(nr, nc)) {
+    pacDir = {...nextDir};
+  }
+  // Move in current dir
+  const mr = pacman.r + pacDir.y;
+  const mc = pacman.c + pacDir.x;
+  if (canMove(mr, mc)) {
+    pacman.r = mr;
+    pacman.c = mc;
+  }
+
+  // Eat dot
+  for (const d of dots) {
+    if (!d.eaten && d.r===pacman.r && d.c===pacman.c) d.eaten = true;
+  }
+
+  // Check collision after pacman moves
+  if (checkGhostCollision()) return;
+
+  // Check exit
+  checkExit();
+}
+
+function checkExit() {
+  if (pacman.r === exitCell.r && pacman.c === exitCell.c) {
+    msgEl.textContent = '🎉 ¡Nivel superado!';
+    gameOver = true; // pause game briefly
+    setTimeout(() => {
+      level++;
+      gameOver = false;
+      initLevel();
+    }, 700);
+  }
+}
+
+function moveGhosts() {
+  for (const g of ghosts) {
+    g.moveTimer++;
+    if (g.moveTimer < g.moveInterval) continue;
+    g.moveTimer = 0;
+
+    let moved = false;
+
+    // Safety zone: if very close to pacman at level 1, move away
+    const dist = Math.abs(g.r - pacman.r) + Math.abs(g.c - pacman.c);
+    const safeRadius = Math.max(2, 4 - (level-1));
+
+    if (dist < safeRadius && level === 1) {
+      // Move away
+      const dirs = [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
+      const away = dirs.filter(d => {
+        const nr=g.r+d.r,nc=g.c+d.c;
+        return canMove(nr,nc);
+      }).sort((a,b)=>{
+        const da=Math.abs((g.r+a.r)-pacman.r)+Math.abs((g.c+a.c)-pacman.c);
+        const db=Math.abs((g.r+b.r)-pacman.r)+Math.abs((g.c+b.c)-pacman.c);
+        return db-da;
+      });
+      if(away.length){g.r+=away[0].r;g.c+=away[0].c;moved=true;}
+    }
+
+    if (!moved) {
+      if (g.chasing && Math.random() < 0.7) {
+        // BFS chase
+        const next = bfsNext(g.r, g.c, pacman.r, pacman.c);
+        if (canMove(next.r, next.c)) { g.r=next.r; g.c=next.c; moved=true; }
+      }
+      if (!moved) {
+        // Random
+        const dirs = [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
+        shuffle(dirs);
+        for (const d of dirs) {
+          if (canMove(g.r+d.r, g.c+d.c)) {
+            g.r+=d.r; g.c+=d.c; moved=true; break;
+          }
+        }
+      }
+    }
+
+    // Collision with pacman
+    if (checkGhostCollision()) return;
+  }
+}
+
+function loseLife() {
+  lives--;
+  updateHUD();
+  if (lives <= 0) {
+    gameOver = true;
+    msgEl.style.color = '#FF0000';
+    msgEl.textContent = 'GAME OVER';
+    restartBtn.style.display = 'inline-block';
+  } else {
+    // Reset pacman position
+    pacman.r = 1; pacman.c = 1;
+    pacDir = {x:0,y:0}; nextDir = {x:0,y:0};
+    msgEl.textContent = `💀 ¡Perdiste una vida! Vidas: ${lives}`;
+    setTimeout(() => { if(!gameOver) msgEl.textContent = '¡Llega a la puerta!'; }, 1500);
+  }
+}
+
+function restartGame() {
+  level = 1; lives = 3;
+  restartBtn.style.display = 'none';
+  initLevel();
+}
+
+// ---- Drawing ----
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw maze
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (maze[r][c] === 1) {
+        ctx.fillStyle = '#0000CC';
+        ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
+        ctx.strokeStyle = '#0033FF';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c*CELL+0.5, r*CELL+0.5, CELL-1, CELL-1);
+      }
+    }
+  }
+
+  // Draw dots
+  for (const d of dots) {
+    if (d.eaten) continue;
+    const x = d.c*CELL + CELL/2;
+    const y = d.r*CELL + CELL/2;
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(x, y, CELL*0.12, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw exit (door)
+  if (!gameOver) {
+    const ex = exitCell.c*CELL, ey = exitCell.r*CELL;
+    // Glow
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(ex+1, ey+1, CELL-2, CELL-2);
+    // Door frame
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ex+2, ey+2, CELL-4, CELL-4);
+    // Door knob
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(ex+CELL*0.7, ey+CELL/2, CELL*0.1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+  }
+
+  // Draw ghosts
+  for (const g of ghosts) {
+    const gx = g.c*CELL + CELL/2;
+    const gy = g.r*CELL + CELL/2;
+    const gr = CELL*0.38;
+    ctx.fillStyle = g.color;
+    // Body
+    ctx.beginPath();
+    ctx.arc(gx, gy - gr*0.1, gr, Math.PI, 0, false);
+    ctx.lineTo(gx+gr, gy+gr*0.9);
+    // Wavy bottom
+    const waves = 3;
+    for (let w = waves; w >= 0; w--) {
+      const wx = gx + gr - (w * 2*gr/waves);
+      const wy = gy + gr*0.9 + (w%2===0 ? gr*0.3 : 0);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.lineTo(gx-gr, gy+gr*0.9);
+    ctx.closePath();
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(gx-gr*0.3, gy-gr*0.2, gr*0.22, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(gx+gr*0.3, gy-gr*0.2, gr*0.22, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#00f';
+    ctx.beginPath(); ctx.arc(gx-gr*0.3, gy-gr*0.15, gr*0.1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(gx+gr*0.3, gy-gr*0.15, gr*0.1, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Draw pacman
+  const px = pacman.c*CELL + CELL/2;
+  const py = pacman.r*CELL + CELL/2;
+  const pr = CELL*0.4;
+
+  // Mouth animation
+  mouthAngle += mouthOpen ? 0.08 : -0.08;
+  if (mouthAngle >= 0.35) mouthOpen = false;
+  if (mouthAngle <= 0.02) mouthOpen = true;
+
+  // Rotation based on direction
+  let angle = 0;
+  if (pacDir.x===1) angle=0;
+  else if (pacDir.x===-1) angle=Math.PI;
+  else if (pacDir.y===1) angle=Math.PI/2;
+  else if (pacDir.y===-1) angle=-Math.PI/2;
+
+  ctx.fillStyle = '#FFD700';
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.arc(px, py, pr, angle + mouthAngle*Math.PI, angle + (2-mouthAngle)*Math.PI);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye
+  const eyeX = px + Math.cos(angle - Math.PI/4)*pr*0.5;
+  const eyeY = py + Math.sin(angle - Math.PI/4)*pr*0.5;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, pr*0.12, 0, Math.PI*2);
+  ctx.fill();
+}
+
+// ---- Game loop ----
+const PACMAN_SPEED = 5; // frames per move (slower = easier)
+const PACMAN_SPEED_MIN = 5;
+
+function loop() {
+  if (!gameOver && !gameWon) {
+    frame++;
+    if (frame % PACMAN_SPEED === 0) movePacman();
+    if (!gameOver) moveGhosts();
+    // Check collision every frame (catches cross-over between moves)
+    if (!gameOver) checkGhostCollision();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+initLevel();
+loop();
+</script>
+</body>
+</html>
