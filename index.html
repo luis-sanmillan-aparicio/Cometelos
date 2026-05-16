@@ -152,26 +152,33 @@ document.addEventListener('keydown', e => {
 });
 
 // ---- Maze generation ----
-// Backtracker clásico + 28 cruces extra para bifurcaciones. Paredes sólidas.
+// Backtracker iterativo (sin recursión, evita stack overflow en Safari iOS)
+// + 28 cruces extra para bifurcaciones.
 function generateMaze() {
   const grid = Array.from({length: ROWS}, () => Array(COLS).fill(1));
 
-  function carve(r, c) {
+  grid[1][1] = 0;
+  const stack = [{r:1, c:1}];
+
+  while (stack.length > 0) {
+    const cur = stack[stack.length - 1];
     const dirs = [{r:-2,c:0},{r:2,c:0},{r:0,c:-2},{r:0,c:2}];
     shuffle(dirs);
+    let moved = false;
     for (const d of dirs) {
-      const nr = r + d.r, nc = c + d.c;
+      const nr = cur.r + d.r, nc = cur.c + d.c;
       if (nr>0 && nr<ROWS-1 && nc>0 && nc<COLS-1 && grid[nr][nc]===1) {
-        grid[r+d.r/2][c+d.c/2] = 0;
+        grid[cur.r + d.r/2][cur.c + d.c/2] = 0;
         grid[nr][nc] = 0;
-        carve(nr, nc);
+        stack.push({r:nr, c:nc});
+        moved = true;
+        break;
       }
     }
+    if (!moved) stack.pop();
   }
-  grid[1][1] = 0;
-  carve(1, 1);
 
-  // Abrir ~28 paredes internas entre pasillos ya existentes para añadir cruces
+  // Abrir ~28 paredes internas entre pasillos para añadir cruces
   const candidates = [];
   for (let r = 1; r < ROWS-1; r++) {
     for (let c = 1; c < COLS-1; c++) {
@@ -625,3 +632,4 @@ document.addEventListener('visibilitychange', () => {
 </script>
 </body>
 </html>
+
