@@ -385,11 +385,14 @@ function loseLife() {
     msgEl.textContent = 'GAME OVER';
     restartBtn.style.display = 'inline-block';
   } else {
-    // Reset pacman position
-    pacman.r = 1; pacman.c = 1;
-    pacDir = {x:0,y:0}; nextDir = {x:0,y:0};
+    // Reiniciar escenario completo manteniendo nivel y vidas
+    gameOver = true; // pausa mientras se reinicia
+    msgEl.style.color = '#FF6600';
     msgEl.textContent = `💀 ¡Perdiste una vida! Vidas: ${lives}`;
-    setTimeout(() => { if(!gameOver) msgEl.textContent = '¡Llega a la puerta!'; }, 1500);
+    setTimeout(() => {
+      gameOver = false;
+      initLevel();
+    }, 1200);
   }
 }
 
