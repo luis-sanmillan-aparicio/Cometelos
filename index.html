@@ -295,7 +295,7 @@ function initLevel() {
       if (maze[r][c] === 0) dots.push({r,c,eaten:false});
 
   // Pacman starts at (1,1)
-  pacman = {r:1, c:1, x:1, y:1};
+  pacman = {r:1, c:1, x:1, y:1, prevR:1, prevC:1};
   pacDir = {x:0, y:0};
   nextDir = {x:0, y:0};
   mouthAngle = 0.25;
@@ -429,7 +429,15 @@ function checkGhostCollision() {
   if (Date.now() < immuneUntil) return false;
   if (Date.now() < invulnerableUntil) return false;
   for (const g of ghosts) {
+    // Same cell
     if (g.r === pacman.r && g.c === pacman.c) {
+      loseLife();
+      return true;
+    }
+    // Cross-over: they swapped positions
+    if (g.prevR !== undefined && pacman.prevR !== undefined &&
+        g.r === pacman.prevR && g.c === pacman.prevC &&
+        g.prevR === pacman.r && g.prevC === pacman.c) {
       loseLife();
       return true;
     }
@@ -438,6 +446,8 @@ function checkGhostCollision() {
 }
 
 function movePacman() {
+  pacman.prevR = pacman.r;
+  pacman.prevC = pacman.c;
   // Try to apply nextDir
   const nr = pacman.r + nextDir.y;
   const nc = pacman.c + nextDir.x;
@@ -538,6 +548,8 @@ function moveGhosts() {
     if (g.moveTimer < g.moveInterval) continue;
     g.moveTimer = 0;
 
+    g.prevR = g.r;
+    g.prevC = g.c;
     let moved = false;
 
     // Safety zone: if very close to pacman at level 1, move away
@@ -940,5 +952,4 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
-
 
