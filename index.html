@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -124,6 +123,7 @@ let maze = [], dots = [];
 let pacman = {}, ghosts = [], apples = [];
 let frozenUntil = 0; // timestamp when ghost freeze ends
 let immuneUntil = 0;  // timestamp when pacman immunity ends
+let invulnerableUntil = 0; // brief invulnerability after losing a life
 let exitCell = {};
 let gameOver = false, gameWon = false;
 let frame = 0;
@@ -343,7 +343,8 @@ function bfsNext(fromR, fromC, toR, toC) {
 }
 
 function checkGhostCollision() {
-  if (Date.now() < immuneUntil) return false; // immune, no damage
+  if (Date.now() < immuneUntil) return false;
+  if (Date.now() < invulnerableUntil) return false;
   for (const g of ghosts) {
     if (g.r === pacman.r && g.c === pacman.c) {
       loseLife();
@@ -477,20 +478,23 @@ function moveGhosts() {
 }
 
 function loseLife() {
-  lives--;
+  if (Date.now() < invulnerableUntil) return; // double-check
+  lives = Math.max(0, lives - 1);
+  invulnerableUntil = Date.now() + 2000; // 2s invulnerability after hit
   updateHUD();
   if (lives <= 0) {
+    lives = 0;
     gameOver = true;
     msgEl.style.color = '#FF0000';
     msgEl.textContent = 'GAME OVER';
     restartBtn.style.display = 'inline-block';
   } else {
-    // Reiniciar escenario completo manteniendo nivel y vidas
-    gameOver = true; // pausa mientras se reinicia
+    gameOver = true;
     msgEl.style.color = '#FF6600';
     msgEl.textContent = `💀 ¡Perdiste una vida! Vidas: ${lives}`;
     setTimeout(() => {
       gameOver = false;
+      invulnerableUntil = Date.now() + 2000;
       initLevel();
     }, 1200);
   }
