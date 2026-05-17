@@ -606,6 +606,8 @@ function loseLife() {
 
 function restartGame() {
   level = 1; lives = 5;
+  speedFactor = initialSpeedFactor;
+  PACMAN_SPEED = Math.round(5 * speedFactor);
   frozenUntil = 0;
   immuneUntil = 0;
   invulnerableUntil = 0;
@@ -835,7 +837,8 @@ function draw() {
 let PACMAN_SPEED = 5; // frames per move (higher = slower)
 const PACMAN_SPEED_MIN = 5;
 let speedFactor = 1.0; // 1.0=max, 2.0=half speed
-const SPEED_DELTA = 1.0 / 29; // increment per level (~0.0345)
+let initialSpeedFactor = 1.0; // set from slider, restored on restart
+const SPEED_DELTA = 0.5 / 29; // increment per level (~0.0172)
 
 function loop() {
   if (canvas.width === 0 || canvas.height === 0) resize();
@@ -860,6 +863,7 @@ function startGame() {
   if (slider) {
     const val = parseInt(slider.value); // 1 to 10
     speedFactor = 2.0 - (val - 1) / 9.0; // 1→2.0, 10→1.0
+    initialSpeedFactor = speedFactor;
     PACMAN_SPEED = Math.round(5 * speedFactor); // 5(fast) to 10(slow)
   }
   const splash = document.getElementById('splash');
