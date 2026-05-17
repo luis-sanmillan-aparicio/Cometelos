@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -122,6 +123,7 @@ let level = 1, lives = 5;
 let maze = [], dots = [];
 let pacman = {}, ghosts = [], apples = [];
 let frozenUntil = 0; // timestamp when ghost freeze ends
+let immuneUntil = 0;  // timestamp when pacman immunity ends
 let exitCell = {};
 let gameOver = false, gameWon = false;
 let frame = 0;
@@ -279,20 +281,28 @@ function initLevel() {
     });
   }
 
-  // Apples: 1 + 1 per every 3 ghosts
+  // Regalos: 1 + 1 por cada 3 fantasmas. Mitad manzanas, mitad pócimas.
   apples = [];
   frozenUntil = 0;
-  const appleCount = 1 + Math.floor(ghostCount / 3);
-  const appleCandidates = reachable.filter(c =>
+  immuneUntil = 0;
+  const giftCount = ghostCount; // mismo número de regalos que fantasmas
+  const giftCandidates = reachable.filter(c =>
     !(c.r===1 && c.c===1) &&
-    !(c.r===exitCell.r && c.c===exitCell.c) &&
-    !dots.find(d => d.eaten && d.r===c.r && d.c===c.c)
+    !(c.r===exitCell.r && c.c===exitCell.c)
   );
-  shuffle(appleCandidates);
-  for (let i = 0; i < Math.min(appleCount, appleCandidates.length); i++) {
-    apples.push({r: appleCandidates[i].r, c: appleCandidates[i].c, eaten: false});
+  shuffle(giftCandidates);
+  // Construir array de tipos: mitad manzanas, mitad pócimas, impares aleatorio
+  // El primer regalo siempre aleatorio
+  const half = Math.floor(giftCount / 2);
+  const types = [];
+  for (let i = 0; i < half; i++) types.push('apple');
+  for (let i = 0; i < half; i++) types.push('potion');
+  if (giftCount % 2 !== 0) types.push(Math.random() < 0.5 ? 'apple' : 'potion');
+  shuffle(types); // mezclar para que el primero sea aleatorio
+  for (let i = 0; i < Math.min(giftCount, giftCandidates.length); i++) {
+    apples.push({r: giftCandidates[i].r, c: giftCandidates[i].c, eaten: false, type: types[i]});
   }
-  // Remove dots under apples
+  // Remove dots under gifts
   for (const a of apples) dots = dots.filter(d => !(d.r===a.r && d.c===a.c));
 
   gameOver = false;
@@ -333,6 +343,7 @@ function bfsNext(fromR, fromC, toR, toC) {
 }
 
 function checkGhostCollision() {
+  if (Date.now() < immuneUntil) return false; // immune, no damage
   for (const g of ghosts) {
     if (g.r === pacman.r && g.c === pacman.c) {
       loseLife();
@@ -362,22 +373,36 @@ function movePacman() {
     if (!d.eaten && d.r===pacman.r && d.c===pacman.c) d.eaten = true;
   }
 
-  // Eat apple
+  // Eat gift
   for (const a of apples) {
     if (!a.eaten && a.r===pacman.r && a.c===pacman.c) {
       a.eaten = true;
-      frozenUntil = Date.now() + 10000;
-      msgEl.style.color = '#00FF88';
-      if (window._freezeInterval) clearInterval(window._freezeInterval);
-      window._freezeInterval = setInterval(() => {
-        const remaining = Math.ceil((frozenUntil - Date.now()) / 1000);
-        if (remaining > 0) {
-          msgEl.textContent = '❄️ ¡Fantasmas congelados ' + remaining + 's!';
-        } else {
-          clearInterval(window._freezeInterval);
-          if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }
-        }
-      }, 200);
+      if (window._giftInterval) clearInterval(window._giftInterval);
+      if (a.type === 'apple') {
+        frozenUntil = Date.now() + 10000;
+        msgEl.style.color = '#00FF88';
+        window._giftInterval = setInterval(() => {
+          const remaining = Math.ceil((frozenUntil - Date.now()) / 1000);
+          if (remaining > 0) {
+            msgEl.textContent = '❄️ ¡Fantasmas congelados ' + remaining + 's!';
+          } else {
+            clearInterval(window._giftInterval);
+            if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }
+          }
+        }, 200);
+      } else {
+        immuneUntil = Date.now() + 10000;
+        msgEl.style.color = '#CC44FF';
+        window._giftInterval = setInterval(() => {
+          const remaining = Math.ceil((immuneUntil - Date.now()) / 1000);
+          if (remaining > 0) {
+            msgEl.textContent = '🔮 ¡Inmunidad ' + remaining + 's!';
+          } else {
+            clearInterval(window._giftInterval);
+            if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }
+          }
+        }, 200);
+      }
     }
   }
 
@@ -506,35 +531,62 @@ function draw() {
     ctx.fill();
   }
 
-  // Draw apples
+  // Draw gifts
   const frozen = Date.now() < frozenUntil;
+  const immune = Date.now() < immuneUntil;
   for (const a of apples) {
     if (a.eaten) continue;
     const ax = a.c*CELL + CELL/2;
     const ay = a.r*CELL + CELL/2;
     const ar = CELL*0.35;
-    // Apple body
-    ctx.fillStyle = frozen ? '#00FF88' : '#FF2222';
-    ctx.beginPath();
-    ctx.arc(ax, ay + ar*0.1, ar, 0, Math.PI*2);
-    ctx.fill();
-    // Shine
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(ax - ar*0.3, ay - ar*0.2, ar*0.25, 0, Math.PI*2);
-    ctx.fill();
-    // Stem
-    ctx.strokeStyle = '#228B22';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay - ar);
-    ctx.quadraticCurveTo(ax + ar*0.5, ay - ar*1.5, ax + ar*0.3, ay - ar*1.2);
-    ctx.stroke();
-    // Leaf
-    ctx.fillStyle = '#228B22';
-    ctx.beginPath();
-    ctx.ellipse(ax + ar*0.4, ay - ar*1.25, ar*0.25, ar*0.12, -0.5, 0, Math.PI*2);
-    ctx.fill();
+    if (a.type === 'apple') {
+      // Apple body
+      ctx.fillStyle = frozen ? '#00FF88' : '#FF2222';
+      ctx.beginPath();
+      ctx.arc(ax, ay + ar*0.1, ar, 0, Math.PI*2);
+      ctx.fill();
+      // Shine
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(ax - ar*0.3, ay - ar*0.2, ar*0.25, 0, Math.PI*2);
+      ctx.fill();
+      // Stem
+      ctx.strokeStyle = '#228B22';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay - ar);
+      ctx.quadraticCurveTo(ax + ar*0.5, ay - ar*1.5, ax + ar*0.3, ay - ar*1.2);
+      ctx.stroke();
+      // Leaf
+      ctx.fillStyle = '#228B22';
+      ctx.beginPath();
+      ctx.ellipse(ax + ar*0.4, ay - ar*1.25, ar*0.25, ar*0.12, -0.5, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      // Potion bottle
+      const pc2 = immune ? '#FF88FF' : '#AA00FF';
+      // Bottle body
+      ctx.fillStyle = pc2;
+      ctx.beginPath();
+      ctx.ellipse(ax, ay + ar*0.15, ar*0.55, ar*0.75, 0, 0, Math.PI*2);
+      ctx.fill();
+      // Shine
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(ax - ar*0.2, ay - ar*0.1, ar*0.18, ar*0.35, -0.3, 0, Math.PI*2);
+      ctx.fill();
+      // Neck
+      ctx.fillStyle = pc2;
+      ctx.fillRect(ax - ar*0.2, ay - ar*0.75, ar*0.4, ar*0.4);
+      // Cork
+      ctx.fillStyle = '#D2691E';
+      ctx.fillRect(ax - ar*0.18, ay - ar*0.95, ar*0.36, ar*0.22);
+      // Liquid shine
+      ctx.fillStyle = 'rgba(255,200,255,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(ax, ay + ar*0.3, ar*0.3, ar*0.25, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
   }
 
   // Draw exit (door)
@@ -604,7 +656,8 @@ function draw() {
   else if (pacDir.y===1) angle=Math.PI/2;
   else if (pacDir.y===-1) angle=-Math.PI/2;
 
-  ctx.fillStyle = '#FFD700';
+  const isImmune = Date.now() < immuneUntil;
+  ctx.fillStyle = isImmune ? '#CC44FF' : '#FFD700';
   ctx.beginPath();
   ctx.moveTo(px, py);
   ctx.arc(px, py, pr, angle + mouthAngle*Math.PI, angle + (2-mouthAngle)*Math.PI);
@@ -716,4 +769,3 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
-
