@@ -502,6 +502,10 @@ function loseLife() {
 
 function restartGame() {
   level = 1; lives = 5;
+  frozenUntil = 0;
+  immuneUntil = 0;
+  invulnerableUntil = 0;
+  if (window._giftInterval) clearInterval(window._giftInterval);
   restartBtn.style.display = 'none';
   initLevel();
 }
