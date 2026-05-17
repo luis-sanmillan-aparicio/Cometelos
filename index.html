@@ -368,8 +368,16 @@ function movePacman() {
       a.eaten = true;
       frozenUntil = Date.now() + 10000;
       msgEl.style.color = '#00FF88';
-      msgEl.textContent = '❄️ ¡Fantasmas congelados 10s!';
-      setTimeout(() => { if (!gameOver) msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }, 10000);
+      if (window._freezeInterval) clearInterval(window._freezeInterval);
+      window._freezeInterval = setInterval(() => {
+        const remaining = Math.ceil((frozenUntil - Date.now()) / 1000);
+        if (remaining > 0) {
+          msgEl.textContent = '❄️ ¡Fantasmas congelados ' + remaining + 's!';
+        } else {
+          clearInterval(window._freezeInterval);
+          if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }
+        }
+      }, 200);
     }
   }
 
@@ -708,3 +716,4 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
+
