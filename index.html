@@ -87,12 +87,59 @@
     animation: blink 1s step-start infinite;
   }
   @keyframes blink { 50% { opacity: 0; } }
+  #speedControl {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    width: 220px;
+  }
+  #speedControl .speed-label {
+    color: #FFD700;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+  #speedControl .speed-marks {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    color: #FFD700;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+  }
+  #speedSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(to right, #FFD700, #FF8800, #FF2200);
+    border-radius: 3px;
+    outline: none;
+  }
+  #speedSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #FFD700;
+    border: 3px solid #000;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body style="background:#000">
 <div id="splash" ontouchstart="startGame()" onclick="startGame()">
   <canvas id="splashCanvas" width="160" height="160"></canvas>
   <div id="splashText">TOCA PARA JUGAR</div>
+  <div id="speedControl" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
+    <div class="speed-label">VELOCIDAD</div>
+    <input type="range" id="speedSlider" min="1" max="10" value="5" step="1">
+    <div class="speed-marks"><span>MITAD</span><span>NORMAL</span><span>MÁXIMO</span></div>
+  </div>
 </div>
 <div id="hud">NIVEL: 1 &nbsp; VIDAS: 5</div>
 <canvas id="gameCanvas"></canvas>
@@ -266,6 +313,10 @@ function initLevel() {
   dots = dots.filter(d => !(d.r===exitCell.r && d.c===exitCell.c));
 
   // Ghosts: 1 fantasma nivel 1-2, 2 en nivel 3-4, etc. (máx 5)
+  // Increase speed each level by fixed delta (reaches max at level 30 from half speed)
+  if (level > 1) speedFactor = Math.max(0.3, speedFactor - SPEED_DELTA);
+  PACMAN_SPEED = Math.max(1, Math.round(5 * speedFactor));
+
   const ghostCount = Math.min(Math.ceil(level / 2), 5);
   ghosts = [];
   const ghostColors = ['#FF00FF','#00FF00','#FF6600','#00FFFF','#FF0055'];
@@ -279,7 +330,7 @@ function initLevel() {
       color: ghostColors[i % ghostColors.length],
       chasing: i % 3 === 0, // every 3rd ghost chases
       moveTimer: 0,
-      moveInterval: Math.max(10, 22 - (level-1)*2)
+      moveInterval: Math.round(Math.max(10, 22 - (level-1)*2) * speedFactor)
     });
   }
 
@@ -781,8 +832,10 @@ function draw() {
 }
 
 // ---- Game loop ----
-const PACMAN_SPEED = 5; // frames per move (slower = easier)
+let PACMAN_SPEED = 5; // frames per move (higher = slower)
 const PACMAN_SPEED_MIN = 5;
+let speedFactor = 1.0; // 1.0=max, 2.0=half speed
+const SPEED_DELTA = 1.0 / 29; // increment per level (~0.0345)
 
 function loop() {
   if (canvas.width === 0 || canvas.height === 0) resize();
@@ -802,6 +855,13 @@ let gameStarted = false;
 function startGame() {
   if (gameStarted) return;
   gameStarted = true;
+  // Read speed slider: 1(mitad)→speedFactor=2.0, 10(máximo)→speedFactor=1.0
+  const slider = document.getElementById('speedSlider');
+  if (slider) {
+    const val = parseInt(slider.value); // 1 to 10
+    speedFactor = 2.0 - (val - 1) / 9.0; // 1→2.0, 10→1.0
+    PACMAN_SPEED = Math.round(5 * speedFactor); // 5(fast) to 10(slow)
+  }
   const splash = document.getElementById('splash');
   if (splash) splash.remove();
   resize();
@@ -876,4 +936,5 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
+
 
