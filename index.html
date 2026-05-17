@@ -124,6 +124,8 @@ let pacman = {}, ghosts = [], apples = [];
 let frozenUntil = 0; // timestamp when ghost freeze ends
 let immuneUntil = 0;  // timestamp when pacman immunity ends
 let invulnerableUntil = 0; // brief invulnerability after losing a life
+let heart = null; // extra life heart
+let dynamite = null; // dynamite that blasts all ghosts
 let exitCell = {};
 let gameOver = false, gameWon = false;
 let frame = 0;
@@ -305,6 +307,36 @@ function initLevel() {
   // Remove dots under gifts
   for (const a of apples) dots = dots.filter(d => !(d.r===a.r && d.c===a.c));
 
+  // Dynamite: appears on levels that are NOT multiples of 3
+  dynamite = null;
+  if (level % 3 !== 0) {
+    const dynamiteCandidates = reachable.filter(c =>
+      !(c.r===1 && c.c===1) &&
+      !(c.r===exitCell.r && c.c===exitCell.c) &&
+      !apples.find(a => a.r===c.r && a.c===c.c)
+    );
+    shuffle(dynamiteCandidates);
+    if (dynamiteCandidates.length > 0) {
+      dynamite = {r: dynamiteCandidates[0].r, c: dynamiteCandidates[0].c, eaten: false};
+      dots = dots.filter(d => !(d.r===dynamite.r && d.c===dynamite.c));
+    }
+  }
+
+  // Heart: appears every 3 levels starting at level 3
+  heart = null;
+  if (level % 3 === 0) {
+    const heartCandidates = reachable.filter(c =>
+      !(c.r===1 && c.c===1) &&
+      !(c.r===exitCell.r && c.c===exitCell.c) &&
+      !apples.find(a => a.r===c.r && a.c===c.c)
+    );
+    shuffle(heartCandidates);
+    if (heartCandidates.length > 0) {
+      heart = {r: heartCandidates[0].r, c: heartCandidates[0].c, eaten: false};
+      dots = dots.filter(d => !(d.r===heart.r && d.c===heart.c));
+    }
+  }
+
   gameOver = false;
   gameWon = false;
   frame = 0;
@@ -407,6 +439,27 @@ function movePacman() {
     }
   }
 
+  // Collect dynamite
+  if (dynamite && !dynamite.eaten && dynamite.r===pacman.r && dynamite.c===pacman.c) {
+    dynamite.eaten = true;
+    ghosts = []; // all ghosts disappear
+    if (window._giftInterval) clearInterval(window._giftInterval);
+    msgEl.style.color = '#FF8800';
+    msgEl.textContent = '💥 ¡Fantasmas eliminados!';
+    setTimeout(() => { if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }}, 2000);
+  }
+
+  // Collect heart
+  if (heart && !heart.eaten && heart.r===pacman.r && heart.c===pacman.c) {
+    heart.eaten = true;
+    lives++;
+    updateHUD();
+    if (window._giftInterval) clearInterval(window._giftInterval);
+    msgEl.style.color = '#FF4444';
+    msgEl.textContent = '❤️ ¡Vida extra! Vidas: ' + lives;
+    setTimeout(() => { if (!gameOver) { msgEl.textContent = '¡Llega a la puerta!'; msgEl.style.color = '#FFD700'; }}, 2000);
+  }
+
   // Check collision after pacman moves
   if (checkGhostCollision()) return;
 
@@ -506,6 +559,8 @@ function restartGame() {
   immuneUntil = 0;
   invulnerableUntil = 0;
   if (window._giftInterval) clearInterval(window._giftInterval);
+  heart = null;
+  dynamite = null;
   restartBtn.style.display = 'none';
   initLevel();
 }
@@ -595,6 +650,50 @@ function draw() {
       ctx.ellipse(ax, ay + ar*0.3, ar*0.3, ar*0.25, 0, 0, Math.PI*2);
       ctx.fill();
     }
+  }
+
+  // Draw heart
+  if (heart && !heart.eaten) {
+    const hx = heart.c*CELL + CELL/2;
+    const hy = heart.r*CELL + CELL/2;
+    const hs = CELL*0.38;
+    ctx.fillStyle = '#FF2255';
+    ctx.beginPath();
+    // Left bump
+    ctx.arc(hx - hs*0.5, hy - hs*0.15, hs*0.5, Math.PI, 0);
+    // Right bump
+    ctx.arc(hx + hs*0.5, hy - hs*0.15, hs*0.5, Math.PI, 0);
+    // Bottom point
+    ctx.lineTo(hx + hs, hy - hs*0.15);
+    ctx.lineTo(hx, hy + hs*0.85);
+    ctx.lineTo(hx - hs, hy - hs*0.15);
+    ctx.closePath();
+    ctx.fill();
+    // Shine
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(hx - hs*0.3, hy - hs*0.25, hs*0.2, hs*0.12, -0.3, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw dynamite (TNT box, diagonal, no fuse)
+  if (dynamite && !dynamite.eaten) {
+    const dx = dynamite.c*CELL + CELL/2;
+    const dy = dynamite.r*CELL + CELL/2;
+    const ds = CELL*0.42;
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.rotate(Math.PI/4);
+    ctx.fillStyle = '#FF6600';
+    ctx.beginPath();
+    ctx.roundRect(-ds, -ds*0.65, ds*2, ds*1.3, 4);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.font = `bold ${Math.round(ds*0.72)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TNT', 0, 0);
+    ctx.restore();
   }
 
   // Draw exit (door)
@@ -777,3 +876,4 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
+
