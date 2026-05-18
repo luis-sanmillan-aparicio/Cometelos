@@ -446,6 +446,8 @@ function checkGhostCollision() {
 }
 
 function movePacman() {
+  // Check BEFORE moving
+  if (checkGhostCollision()) return;
   pacman.prevR = pacman.r;
   pacman.prevC = pacman.c;
   // Try to apply nextDir
@@ -548,6 +550,10 @@ function moveGhosts() {
     if (g.moveTimer < g.moveInterval) continue;
     g.moveTimer = 0;
 
+    // Check BEFORE moving
+    if (Date.now() >= immuneUntil && Date.now() >= invulnerableUntil) {
+      if (g.r === pacman.r && g.c === pacman.c) { loseLife(); return; }
+    }
     g.prevR = g.r;
     g.prevC = g.c;
     let moved = false;
@@ -588,8 +594,13 @@ function moveGhosts() {
       }
     }
 
-    // Collision with pacman
-    if (checkGhostCollision()) return;
+    // Collision with pacman — check this ghost immediately after it moved
+    if (Date.now() >= immuneUntil && Date.now() >= invulnerableUntil) {
+      if (g.r === pacman.r && g.c === pacman.c) { loseLife(); return; }
+      if (g.prevR !== undefined &&
+          g.r === pacman.prevR && g.c === pacman.prevC &&
+          g.prevR === pacman.r && g.prevC === pacman.c) { loseLife(); return; }
+    }
   }
 }
 
@@ -952,4 +963,3 @@ window.addEventListener('pageshow', (e) => {
 </script>
 </body>
 </html>
-
